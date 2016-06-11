@@ -9,7 +9,7 @@ scalacOptions += "-target:jvm-1.8"
 resolvers += "jw3 at bintray" at "https://dl.bintray.com/jw3/maven"
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.4"
+  val akkaVersion = "2.4.7"
   val scalatestVersion = "3.0.0-M15"
 
   Seq(
@@ -28,3 +28,8 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-stream-testkit" % akkaVersion % Test
   )
 }
+
+enablePlugins(JavaAppPackaging)
+mainClass in Compile := Some("pigpio.examples.serial.Boot")
+dockerRepository := Some("jwiii")
+dockerBaseImage := "jwiii/arm-java:8"
