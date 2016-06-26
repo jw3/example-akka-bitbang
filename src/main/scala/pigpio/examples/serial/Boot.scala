@@ -1,6 +1,9 @@
 package pigpio.examples.serial
 
+import akka.Done
 import akka.actor.ActorSystem
+import akka.stream.{ActorMaterializer, OverflowStrategy}
+import akka.stream.scaladsl.{Sink, Source}
 import com.typesafe.scalalogging.LazyLogging
 import pigpio.scaladsl.GpioPin.Listen
 import pigpio.scaladsl._
@@ -12,6 +15,7 @@ import scala.util.{Failure, Success}
 
 object Boot extends App with LazyLogging {
   implicit val system = ActorSystem()
+  implicit val mat = ActorMaterializer()
   implicit val lpigpio = PigpioLibrary.INSTANCE
 
   DefaultInitializer.gpioInitialise() match {
@@ -32,7 +36,14 @@ object Boot extends App with LazyLogging {
   def run() = {
     val consumer = SerialActor()
     val producer = GpioPin(UserGpio(1))
-    producer.tell(Listen(), consumer)
+
+    val source = Source.actorRef[GpioAlert](100, OverflowStrategy.fail)
+                 .via(SerialActor.bitify)
+                 .to(Sink.actorRef(consumer, Done))
+                 .run()
+
+    // connect the producer to the stream source
+    producer.tell(Listen(), source)
     producer ! InputPin
   }
 }
