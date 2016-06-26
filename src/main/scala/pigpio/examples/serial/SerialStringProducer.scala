@@ -1,7 +1,7 @@
 package pigpio.examples.serial
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
-import pigpio.scaladsl.GpioAlert
+import pigpio.scaladsl.{GpioAlert, Level, Levels}
 
 case object Start
 case object Stop
@@ -21,11 +21,15 @@ case object Loop
 class SerialStringProducer(str: String) extends Actor {
   import SerialActor.BIT_T
   var ticks = 0
+  var lastlevel: Int = Levels.low.value
 
   def started(ref: ActorRef, looping: Boolean): Receive = {
+    // set the line to high
+    //tx(1, BIT_T * 100, ref)
+
     str.foreach(txchar(_, ref))
 
-    val e = if (looping) Start else Stop
+    val e = if (!looping) Start else Stop
     self ! e
 
     {
@@ -56,9 +60,15 @@ class SerialStringProducer(str: String) extends Actor {
   }
 
   def tx(v: Int, t: Int, ref: ActorRef) = {
-    //tickby(t)
-    //println(s"GpioAlert(1, $v, $ticks)  [t+$t]")
-    ref ! GpioAlert(1, v, tickby(t))
+    send(v, ref)
+    tickby(t)
+  }
+
+  def send(l: Int, ref: ActorRef) = {
+    if (l != lastlevel) {
+      lastlevel = l
+      ref ! GpioAlert(1, l, ticks)
+    }
   }
 
   def tickby(t: Int) = {

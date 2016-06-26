@@ -1,7 +1,10 @@
 package pigpio.examples.serial
 
 import akka.actor.{Actor, ActorSystem, Props}
-import pigpio.scaladsl.{GpioAlert, High, Low}
+import akka.stream.scaladsl.Flow
+import pigpio.scaladsl._
+
+import scala.collection.mutable.ListBuffer
 
 
 object SerialActor {
@@ -9,6 +12,39 @@ object SerialActor {
 
   def apply()(implicit sys: ActorSystem) = {
     sys.actorOf(Props(new SerialActor()))
+  }
+
+  /**
+   * translates from GpioAlerts to serial bits
+   * eliminates the need for the SerialActor to worry about timing to allow it to focus on bits alone
+   *
+   * - the level is flipped to translate from the GpioAlert representation of
+   * `changed-to` to the state that is interesting to us which is `changed-from`
+   */
+  def bitify = Flow[GpioAlert].statefulMapConcat {
+    var previous = 0L
+
+    () => { a =>
+      val diff = minimize(a.level, a.tick - previous)
+      val ticks = diff / SerialActor.BIT_T
+      previous = a.tick
+
+      var bits = ListBuffer[Level]()
+      for (t <- 0L until ticks) {
+        bits += Level.flip(a.level)
+      }
+
+      bits.toList
+    }
+  }
+
+  /**
+   * shorten the string of events as much as possible when initialing the stream
+   * to eliminate creating XXX,XXX,XXX,XXX number of events to start out
+   */
+  def minimize(l: Level, ticks: Long) = l match {
+    case High => Math.min(ticks, 10 * BIT_T)
+    case Low => Math.min(ticks, 9 * BIT_T)
   }
 }
 
@@ -23,50 +59,44 @@ object SerialActor {
  * - set high
  */
 class SerialActor extends Actor {
-  import SerialActor.BIT_T
 
-  def waitingOnTwoStopBits: Receive = {
-    var last = 0L
+  def stopBits(count: Int): Receive = {
+    case High =>
+      if (count == 1) context.become(startBit)
+      else context.become(stopBits(1))
 
-    {
-      case a: GpioAlert if a.level == High =>
-        val diff = a.tick - last
-        if (diff == BIT_T * 2) context.become(startBit(a.tick))
-        else reset()
-
-      case a: GpioAlert =>
-        last = a.tick
-    }
+    case Low =>
+      context.become(stopBits(0))
   }
 
-  def startBit(tick: Long): Receive = {
-    case a: GpioAlert if a.level == Low =>
-      val diff = a.tick - tick
-      if (diff == BIT_T) context.become(read(a.tick, 0, 0))
+  def startBit: Receive = {
+    case Low =>
+      context.become(read(0, 0))
+
+    case High =>
+      context.become(stopBits(1))
 
     case _ => reset()
   }
 
-  def read(tick: Long, char: Char, count: Int): Receive = {
-    case a: GpioAlert =>
-      val diff = a.tick - tick
-      if (diff == BIT_T) {
-        println(s"\t${a.level.value}")
-        val char2 = ((char << 1) | a.level.value).toChar
-        context.become(read(a.tick, char2, count + 1))
+  def read(char: Char, count: Int): Receive = {
+    case bit: Level =>
+      if (count < 8) {
+        println(s"\t${bit.value}")
+        val char2 = ((char << 1) | bit.value).toChar
+        context.become(read(char2, count + 1))
       }
-      else if (diff == BIT_T * 2) {
+      else {
         emit(char)
-        context.become(startBit(a.tick))
+        context.become(stopBits(bit.value))
       }
-      else reset()
 
     case _ => reset()
   }
 
   def emit(char: Char) = println(char)
 
-  def reset() = context.become(waitingOnTwoStopBits)
+  def reset() = context.become(stopBits(0))
 
-  def receive: Receive = waitingOnTwoStopBits
+  def receive: Receive = stopBits(0)
 }
