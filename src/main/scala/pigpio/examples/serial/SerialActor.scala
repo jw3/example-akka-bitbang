@@ -8,7 +8,7 @@ import scala.collection.mutable.ListBuffer
 
 
 object SerialActor {
-  val BIT_T = 93
+  val BIT_T = 100
 
   def apply()(implicit sys: ActorSystem) = {
     sys.actorOf(Props(new SerialActor()))
@@ -62,8 +62,8 @@ class SerialActor extends Actor {
 
   def stopBits(count: Int): Receive = {
     case High =>
-      if (count == 1) context.become(startBit)
-      else context.become(stopBits(1))
+      if (count == 19) context.become(startBit)
+      else context.become(stopBits(count + 1))
 
     case Low =>
       context.become(stopBits(0))

@@ -14,10 +14,13 @@ libraryDependencies ++= {
 
   Seq(
     "com.rxthings" %% "webhooks" % "0.5",
-    "com.github.jw3" %% "pigpio-scala" % "0.1-SNAPSHOT",
+    "com.github.jw3" %% "pigpio-scala" % "0.1.40-SNAPSHOT",
 
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
+
+    "net.java.dev.jna" % "jna" % "4.2.1",
+    "com.nativelibs4java" % "jnaerator-runtime" % "0.12",
 
     "ch.qos.logback" % "logback-classic" % "1.1.7" % Runtime,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion % Runtime,
@@ -31,5 +34,5 @@ libraryDependencies ++= {
 
 enablePlugins(JavaAppPackaging)
 mainClass in Compile := Some("pigpio.examples.serial.Boot")
-dockerRepository := Some("jwiii")
+dockerRepository := Some("192.168.0.11:5000/jwiii")
 dockerBaseImage := "jwiii/arm-java:8"
